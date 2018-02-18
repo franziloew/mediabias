@@ -2,6 +2,7 @@
 title: "MediaTenor Data"
 output: 
   html_document:
+    fig_width: 10
     theme: "lumen"
     highlight: "tango"
     code_folding: show
@@ -31,7 +32,7 @@ quartzFonts(
 theme_set(
   theme_bw(base_family = "Roboto", base_size = 10) +
     theme(
-      plot.title = element_text(size = 12,
+      plot.title = element_text(size = 14,
                                 margin = margin(0, 0, 4, 0, "pt")),
       plot.subtitle = element_text(size = 8),
       plot.caption = element_text(size = 6),
@@ -123,31 +124,35 @@ load(file = "output/mediatenor.Rda")
 
 ### Tageszeitungen
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "daily_print") %>%
-  ggplot(aes(year, wertung, color=p_group)) +
-  geom_point(show.legend = F) +
-  facet_wrap(~medium, ncol = 7) +
-  geom_hline(yintercept = 0, color="red", size=0.3) +
+  filter(medium != "Berliner") %>%
+  ggplot(aes(year, wertung, color=p_group, group=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Tageszeitungen (ungewichtet)", color="") +
   theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+        legend.position = "bottom") +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
-
+#p
 ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "daily_print") %>%
-  ggplot(aes(year, weighted, color=p_group)) +
-  geom_point(show.legend = F) +
-  facet_wrap(~medium, ncol = 7) +
-  geom_hline(yintercept = 0, color="red", size=0.3) +
+  filter(medium != "Berliner") %>%
+  ggplot(aes(year, weighted, color=p_group, group=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Tageszeitungen (gewichtet)", color="") +
   theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+        legend.position = "bottom") +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
 ggplotly(p, tooltop=c("medium", "weighted"))
@@ -155,31 +160,32 @@ ggplotly(p, tooltop=c("medium", "weighted"))
 
 ### Magazine und Wochenzeitungen
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "magazine_print") %>%
-  ggplot(aes(year, wertung, color=p_group)) +
-  geom_point(show.legend = F) +
+  ggplot(aes(year, wertung, color=p_group, group = p_group)) +
+  geom_point(size=0.8) + geom_line() +
   facet_wrap(~medium, ncol = 5) +
-  geom_hline(yintercept = 0, color="red", size=0.3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Magazine und Wochenzeitungen (ungewichtet)", color="") +
   theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+        legend.position = "bottom") +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
 ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "magazine_print") %>%
-  ggplot(aes(year, weighted, color=p_group)) +
-  geom_point(show.legend = F) +
+  ggplot(aes(year, weighted, color=p_group, group = p_group)) +
+  geom_point(size=0.8) + geom_line() +
   facet_wrap(~medium, ncol = 5) +
-    geom_hline(yintercept = 0, color="red", size=0.3) +
+    geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Magazine und Wochenzeitungen (gewichtet)", color="") +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+  theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
 ggplotly(p, tooltop=c("medium", "weighted"))
@@ -187,31 +193,31 @@ ggplotly(p, tooltop=c("medium", "weighted"))
 
 ### Nachrichtensendungen
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "news_tv") %>%
   ggplot(aes(year, wertung, color=p_group)) +
-  geom_point(show.legend = F) +
-  facet_wrap(~medium, ncol = 7) +
-  geom_hline(yintercept = 0, color="red", size=0.3) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Nachrichtensendungen (ungewichtet)", color="") +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+  theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
 ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "news_tv") %>%
   ggplot(aes(year, weighted, color=p_group)) +
-  geom_point(show.legend = F) +
-  facet_wrap(~medium, ncol = 7) +
-  geom_hline(yintercept = 0, color="red", size=0.3) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Nachrichtensendungen (gewichtet)", color="") +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+  theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
 ggplotly(p, tooltop=c("medium", "weighted"))
@@ -219,13 +225,14 @@ ggplotly(p, tooltop=c("medium", "weighted"))
 
 ### Politische TV-Shows
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "polit_tv") %>%
   ggplot(aes(year, wertung, color=p_group)) +
-  geom_point(show.legend = F) +
+  geom_point(size=0.8) + geom_line() +
   facet_wrap(~medium, ncol = 6) +
-  geom_hline(yintercept = 0, color="red", size=0.3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Politische TV-Shows (ungewichtet)", color="") +
   theme(axis.text.x = element_text(angle = 90),
         legend.position = "none") +
@@ -234,16 +241,16 @@ p <- df.reduced %>%
 ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
-```{r fig.width=10}
+```{r}
 p <- df.reduced %>%
   filter(category == "polit_tv") %>%
   ggplot(aes(year, weighted, color=p_group)) +
-  geom_point(show.legend = F) +
+  geom_point(size=0.8) + geom_line() +
   facet_wrap(~medium, ncol = 6) +
-  geom_hline(yintercept = 0, color="red", size=0.3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
   labs(x="", y="", title="Politische TV-Shows (gewichtet)", color="") +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = "none") +
+  theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
 ggplotly(p, tooltop=c("medium", "weighted"))
@@ -253,7 +260,6 @@ ggplotly(p, tooltop=c("medium", "weighted"))
 
 ```{r}
 library(radarchart)
-library(ggradar)
 ```
 
 ### Tageszeitungen 
