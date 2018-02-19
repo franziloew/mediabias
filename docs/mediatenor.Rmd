@@ -117,7 +117,7 @@ save(df.reduced, file = "output/mediatenor.Rda")
 
 # Load Data
 
-For details about data description see [here](mediatenor.Rmd)
+For details about data description see [here](https://franziloew.github.io/mediabias/mediatenor.Rmd)
 
 ```{r message=FALSE, warning=FALSE}
 load(file = "../output/mediatenor.Rda")
