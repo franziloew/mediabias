@@ -1,0 +1,419 @@
+---
+title: "MediaTenor Data"
+output: 
+  html_document:
+    fig_width: 10
+    theme: "lumen"
+    highlight: "tango"
+    code_folding: show
+    self_contained: true
+---
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(foreign)
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(readr)
+library(plotly)
+library(scales)
+
+# Theming
+quartzFonts(
+  Roboto =
+    c("Roboto-Light",
+      "Roboto-Bold",
+      "Roboto-Regular",
+      "Roboto-Thin")
+)
+
+theme_set(
+  theme_bw(base_family = "Roboto", base_size = 10) +
+    theme(
+      plot.title = element_text(size = 14,
+                                margin = margin(0, 0, 4, 0, "pt")),
+      plot.subtitle = element_text(size = 8),
+      plot.caption = element_text(size = 6),
+      plot.background   = element_rect("#fafafa", "#fafafa"),
+      panel.background  = element_rect("#fafafa"),
+      panel.border = element_blank()
+    )
+)
+
+rm(list=ls())
+```
+
+```{r eval=FALSE, include=FALSE}
+# Import & Manipulate Data
+
+pp_1998_2012 <- read_csv("../data/pp_1998-2012.csv")
+```
+
+```{r eval=FALSE, include=FALSE}
+### Calculate score
+
+df <- as.tbl(pp_1998_2012) %>%
+  mutate(value = ifelse(wertung2=="Ablehn.", -1,0),
+         value = ifelse(wertung2== "o. eind.",0, value),
+         value = ifelse(wertung2== "Zustimm.",1,value))
+```
+
+```{r eval=FALSE, include=FALSE}
+df <- df %>%
+  # calculate number of obs by medium, p_group, year
+  group_by(medium2, p_group2, year) %>%
+  add_tally() %>%
+  ungroup() %>%
+  mutate(count = n) %>%
+  select(-n) %>%
+  
+  # calculate number of obs by medium, year
+  group_by(medium2, year) %>%
+  add_tally() %>%
+  ungroup() %>%
+  mutate(sumcount = n) %>%
+  select(-n) %>%
+  
+  # calculate weight
+  mutate(weight = count/sumcount) %>%
+  
+  # calculate weighted values
+  mutate(weighted = value * weight,
+         weighted2 = value * (1/weight))
+```
+
+```{r eval=FALSE, include=FALSE}
+df.reduced <- df %>% 
+  group_by(medium2, p_group2, year) %>%
+  summarise(weighted = mean(weighted),
+            weighted2 = mean(weighted2),
+            wertung = mean(value),
+            weight = mean(weight),
+            count = mean(count)) %>%
+  ungroup() %>%
+  mutate(medium = factor(ifelse(grepl("ddeutsche", medium2), "SZ", medium2)),
+         p_group = factor(ifelse(grepl("90", p_group2), "Bündnis 90/ Die Grüne", p_group2))) %>%
+  select(- c(medium2, p_group2))
+```
+
+```{r eval=FALSE, include=FALSE}
+### Assign category to medium
+
+daily_print <- c("Die Welt", "F.A.Z.", "SZ", "Fr. Rundschau", "tageszeitung", "Bild", "Berliner")
+magazine_print <- c("Focus", "Spiegel", "Die Zeit", "Die Woche", "Rh. Merkur", "Stern", "F.A.S.", "WamS", "BamS", "Super Illu")
+news_tv <- c("Tagesthemen", "heute journal", "RTL Aktuell", "Tagesschau", "heute", "ProSieben")
+polit_tv <- c("Fakt", "Frontal 21", "Kontraste", "Monitor", "Panorama", "Plusminus", "Report (BR)", "Report (SWR)", "WISO", "Bericht aus Berlin", "Berlin direkt")
+
+df.reduced <- df.reduced %>%
+  mutate(category = ifelse(medium %in% daily_print, "daily_print", " "),
+         category = ifelse(medium %in% magazine_print, "magazine_print", category),
+         category = ifelse(medium %in% news_tv, "news_tv", category),
+         category = ifelse(medium %in% polit_tv, "polit_tv", category))
+
+save(df.reduced, file = "output/mediatenor.Rda")
+```
+
+# Load Data
+
+For details about data description see [here](mediatenor.Rmd)
+
+```{r message=FALSE, warning=FALSE}
+load(file = "../output/mediatenor.Rda")
+```
+
+## Point Plots
+
+### Tageszeitungen
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "daily_print") %>%
+  filter(medium != "Berliner") %>%
+  ggplot(aes(year, wertung, color=p_group, group=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Tageszeitungen (ungewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "bottom") +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+#p
+ggplotly(p, tooltop=c("medium", "wertung"))
+```
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "daily_print") %>%
+  filter(medium != "Berliner") %>%
+  ggplot(aes(year, weighted, color=p_group, group=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Tageszeitungen (gewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "bottom") +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+
+ggplotly(p, tooltop=c("medium", "weighted"))
+```
+
+### Magazine und Wochenzeitungen
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "magazine_print") %>%
+  ggplot(aes(year, wertung, color=p_group, group = p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 5) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Magazine und Wochenzeitungen (ungewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "bottom") +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+
+ggplotly(p, tooltop=c("medium", "wertung"))
+```
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "magazine_print") %>%
+  ggplot(aes(year, weighted, color=p_group, group = p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 5) +
+    geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Magazine und Wochenzeitungen (gewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+
+ggplotly(p, tooltop=c("medium", "weighted"))
+```
+
+### Nachrichtensendungen
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "news_tv") %>%
+  ggplot(aes(year, wertung, color=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Nachrichtensendungen (ungewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+
+ggplotly(p, tooltop=c("medium", "wertung"))
+```
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "news_tv") %>%
+  ggplot(aes(year, weighted, color=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 3) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Nachrichtensendungen (gewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+
+ggplotly(p, tooltop=c("medium", "weighted"))
+```
+
+### Politische TV-Shows
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "polit_tv") %>%
+  ggplot(aes(year, wertung, color=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 6) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Politische TV-Shows (ungewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90),
+        legend.position = "none") +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+
+ggplotly(p, tooltop=c("medium", "wertung"))
+```
+
+```{r}
+p <- df.reduced %>%
+  filter(category == "polit_tv") %>%
+  ggplot(aes(year, weighted, color=p_group)) +
+  geom_point(size=0.8) + geom_line() +
+  facet_wrap(~medium, ncol = 6) +
+  geom_hline(yintercept = 0, color="grey10", 
+             size=0.3, linetype = 2) +
+  labs(x="", y="", title="Politische TV-Shows (gewichtet)", color="") +
+  theme(axis.text.x = element_text(angle = 90)) +
+  scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
+
+ggplotly(p, tooltop=c("medium", "weighted"))
+```
+
+## Radarcharts
+
+```{r}
+library(radarchart)
+```
+
+### Tageszeitungen 
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "daily_print") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = wertung)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Tageszeitungen (ungewichtet)",
+             scaleStartValue = -0.2,
+             maxScale = 0, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "daily_print") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = weighted)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Tageszeitungen (gewichtet)",
+             scaleStartValue = -0.05,
+             maxScale = 0, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
+
+
+### Magazine und Wochenzeitungen 
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "magazine_print") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = wertung)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Magazine und Wochenzeitungen (ungewichtet)",
+             scaleStartValue = -0.16,
+             maxScale = 0.02, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "magazine_print") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = weighted)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Magazine und Wochenzeitungen (gewichtet)",
+             scaleStartValue = -0.05,
+             maxScale = 0.01, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
+
+### Nachritensendungen 
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "news_tv") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = wertung)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Nachritensendungen (ungewichtet)",
+             scaleStartValue = -0.1,
+             maxScale = -0.01, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "news_tv") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = weighted)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Nachritensendungen (gewichtet)",
+             scaleStartValue = -0.04,
+             maxScale = 0, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
+
+### Politische TV-Shows 
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "polit_tv") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = wertung)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Politische TV-Shows (ungewichtet)",
+             scaleStartValue = -0.45,
+             maxScale = 0.1, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
+
+```{r}
+radar <- df.reduced %>% 
+  filter(category == "polit_tv") %>%
+  group_by(medium, p_group) %>%
+  dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
+  ungroup() %>%
+  spread(key=medium, value = weighted)
+```
+
+```{r}
+chartJSRadar(scores = radar, labelSize = 12, 
+             main = "Politische TV-Shows (gewichtet)",
+             scaleStartValue = -0.16,
+             maxScale = 0.01, 
+             responsive = T,
+             showToolTipLabel = TRUE)
+```
