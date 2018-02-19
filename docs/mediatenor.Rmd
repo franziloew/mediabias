@@ -137,11 +137,11 @@ p <- df.reduced %>%
   geom_hline(yintercept = 0, color="grey10", 
              size=0.3, linetype = 2) +
   labs(x="", y="", title="Tageszeitungen (ungewichtet)", color="") +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = "bottom") +
+  theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
-#p
-ggplotly(p, tooltop=c("medium", "wertung"))
+
+p
+#ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
 ```{r}
@@ -154,11 +154,11 @@ p <- df.reduced %>%
   geom_hline(yintercept = 0, color="grey10", 
              size=0.3, linetype = 2) +
   labs(x="", y="", title="Tageszeitungen (gewichtet)", color="") +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = "bottom") +
+  theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
-ggplotly(p, tooltop=c("medium", "weighted"))
+p
+#ggplotly(p, tooltop=c("medium", "weighted"))
 ```
 
 ### Magazine und Wochenzeitungen
@@ -172,11 +172,11 @@ p <- df.reduced %>%
   geom_hline(yintercept = 0, color="grey10", 
              size=0.3, linetype = 2) +
   labs(x="", y="", title="Magazine und Wochenzeitungen (ungewichtet)", color="") +
-  theme(axis.text.x = element_text(angle = 90),
-        legend.position = "bottom") +
+  theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
-ggplotly(p, tooltop=c("medium", "wertung"))
+p
+#ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
 ```{r}
@@ -191,7 +191,8 @@ p <- df.reduced %>%
   theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
-ggplotly(p, tooltop=c("medium", "weighted"))
+p
+#ggplotly(p, tooltop=c("medium", "weighted"))
 ```
 
 ### Nachrichtensendungen
@@ -208,7 +209,8 @@ p <- df.reduced %>%
   theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
-ggplotly(p, tooltop=c("medium", "wertung"))
+p
+#ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
 ```{r}
@@ -223,7 +225,8 @@ p <- df.reduced %>%
   theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
-ggplotly(p, tooltop=c("medium", "weighted"))
+p
+#ggplotly(p, tooltop=c("medium", "weighted"))
 ```
 
 ### Politische TV-Shows
@@ -241,7 +244,8 @@ p <- df.reduced %>%
         legend.position = "none") +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
-ggplotly(p, tooltop=c("medium", "wertung"))
+p
+#ggplotly(p, tooltop=c("medium", "wertung"))
 ```
 
 ```{r}
@@ -256,7 +260,8 @@ p <- df.reduced %>%
   theme(axis.text.x = element_text(angle = 90)) +
   scale_x_continuous(breaks = seq(min(df.reduced$year),max(df.reduced$year),2)) 
 
-ggplotly(p, tooltop=c("medium", "weighted"))
+p
+#ggplotly(p, tooltop=c("medium", "weighted"))
 ```
 
 ## Radarcharts
