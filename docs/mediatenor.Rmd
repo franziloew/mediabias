@@ -266,8 +266,9 @@ p
 
 ## Radarcharts
 
-```{r}
-library(radarchart)
+```{r message=FALSE, warning=FALSE}
+require(ggiraph)
+require(ggiraphExtra)
 ```
 
 ### Tageszeitungen 
@@ -278,16 +279,14 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = wertung)
+  spread(key=p_group, value = wertung)
 ```
 
 ```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Tageszeitungen (ungewichtet)",
-             scaleStartValue = -0.2,
-             maxScale = 0, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Tageszeitungen (ungewichtet)")
 ```
 
 ```{r}
@@ -296,18 +295,13 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = weighted)
-```
+  spread(key=p_group, value = weighted)
 
-```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Tageszeitungen (gewichtet)",
-             scaleStartValue = -0.05,
-             maxScale = 0, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Tageszeitungen (gewichtet)")
 ```
-
 
 ### Magazine und Wochenzeitungen 
 
@@ -317,16 +311,12 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = wertung)
-```
+  spread(key=p_group, value = wertung)
 
-```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Magazine und Wochenzeitungen (ungewichtet)",
-             scaleStartValue = -0.16,
-             maxScale = 0.02, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Magazine und Wochenzeitungen (ungewichtet)")
 ```
 
 ```{r}
@@ -335,16 +325,12 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = weighted)
-```
+  spread(key=p_group, value = weighted)
 
-```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Magazine und Wochenzeitungen (gewichtet)",
-             scaleStartValue = -0.05,
-             maxScale = 0.01, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Magazine und Wochenzeitungen (gewichtet)")
 ```
 
 ### Nachritensendungen 
@@ -355,16 +341,12 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = wertung)
-```
+  spread(key=p_group, value = wertung)
 
-```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Nachritensendungen (ungewichtet)",
-             scaleStartValue = -0.1,
-             maxScale = -0.01, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Nachritensendungen (ungewichtet)")
 ```
 
 ```{r}
@@ -373,16 +355,12 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = weighted)
-```
+  spread(key=p_group, value = weighted)
 
-```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Nachritensendungen (gewichtet)",
-             scaleStartValue = -0.04,
-             maxScale = 0, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Nachritensendungen (gewichtet)")
 ```
 
 ### Politische TV-Shows 
@@ -393,16 +371,12 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(wertung = mean(wertung, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = wertung)
-```
+  spread(key=p_group, value = wertung)
 
-```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Politische TV-Shows (ungewichtet)",
-             scaleStartValue = -0.45,
-             maxScale = 0.1, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Politische TV-Shows (ungewichtet)")
 ```
 
 ```{r}
@@ -411,14 +385,10 @@ radar <- df.reduced %>%
   group_by(medium, p_group) %>%
   dplyr::summarise(weighted = mean(weighted, na.rm = T)) %>%
   ungroup() %>%
-  spread(key=medium, value = weighted)
-```
+  spread(key=p_group, value = weighted)
 
-```{r}
-chartJSRadar(scores = radar, labelSize = 12, 
-             main = "Politische TV-Shows (gewichtet)",
-             scaleStartValue = -0.16,
-             maxScale = 0.01, 
-             responsive = T,
-             showToolTipLabel = TRUE)
+radar %>%
+  ggRadar(aes(color=medium), rescale = F,
+          alpha = 0, legend.position = "right") +
+  labs(title = "Politische TV-Shows (gewichtet)")
 ```
