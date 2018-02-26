@@ -102,48 +102,6 @@ load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
 df.collapsed[1:20,]
 ```
 
-# Explora Data
-
-```{r fig.height=12, fig.width=12}
-df.collapsed %>%
-  filter(category == "daily_print") %>%
-  ggplot(aes(date, wertung, color = p_group)) +
-  geom_col() +
-  facet_grid(medium~p_group) +
-  labs(x="", y="", title = "Tageszeitungen") +
-  theme(legend.position = "none")
-```
-
-```{r fig.height=12, fig.width=10}
-df.collapsed %>%
-  filter(category == "news_tv") %>%
-  ggplot(aes(date, wertung, color = p_group)) +
-  geom_col() +
-  facet_grid(medium~p_group) +
-  labs(x="", y="", title = "Nachrichtensendungen") +
-  theme(legend.position = "none")
-```
-
-```{r fig.height=12, fig.width=10}
-df.collapsed %>%
-  filter(category == "magazine_print") %>%
-  ggplot(aes(date, wertung, color = p_group)) +
-  geom_col() +
-  facet_grid(medium~p_group) +
-  labs(x="", y="", title = "Magazine und Wochenzeitungen") +
-  theme(legend.position = "none")
-```
-
-```{r fig.height=12, fig.width=10}
-df.collapsed %>%
-  filter(category == "polit_tv") %>%
-  ggplot(aes(date, wertung, color = p_group)) +
-  geom_col() +
-  facet_grid(medium~p_group) +
-  labs(x="", y="", title = "Politsendungen") +
-  theme(legend.position = "none")
-```
-
 # Clustering
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 library(cluster)    # clustering algorithms
@@ -214,4 +172,203 @@ grid.arrange(p1, p2, p3, p4, nrow = 2)
 
 ```
 
+### Tageszeitungen
 
+```{r}
+df.cluster <- 
+  df.collapsed %>%
+  filter(!p_group %in% c("Andere Parteien",
+                         "Rechtsextreme Parteien",
+                         "Linke/PDS/WASG")) %>%
+  filter(category == "daily_print") %>%
+  mutate(
+    #month = week(date),
+         year = year(date)
+        # yearweek = paste(as.character(year),
+        #                  as.character(week)), sep="-"
+        ) %>%
+  group_by(medium, p_group, year) %>%
+  summarise(wertung = mean(wertung, na.rm=T)) %>%
+  ungroup() %>%
+  spread(p_group, wertung) %>%
+  mutate(id = paste(year, medium, sep = "/")) 
+
+
+m.cluster <- as.matrix(df.cluster %>%
+                         select(- c(medium, year, id)))
+row.names(m.cluster) <- df.cluster$id
+head(m.cluster)
+```
+
+```{r}
+m.cluster <- na.omit(m.cluster)
+```
+
+#### K-Means Clustering
+
+```{r fig.height=12, fig.width=12}
+k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
+k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
+k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
+k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
+
+# plots to compare
+p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+```
+
+### Nachrichtensendungen
+
+```{r echo=FALSE}
+df.cluster <- 
+  df.collapsed %>%
+  filter(!p_group %in% c("Andere Parteien",
+                         "Rechtsextreme Parteien",
+                         "Linke/PDS/WASG")) %>%
+  filter(category == "news_tv") %>%
+  mutate(
+    #month = week(date),
+         year = year(date)
+        # yearweek = paste(as.character(year),
+        #                  as.character(week)), sep="-"
+        ) %>%
+  group_by(medium, p_group, year) %>%
+  summarise(wertung = mean(wertung, na.rm=T)) %>%
+  ungroup() %>%
+  spread(p_group, wertung) %>%
+  mutate(id = paste(year, medium, sep = "/")) 
+
+
+m.cluster <- as.matrix(df.cluster %>%
+                         select(- c(medium, year, id)))
+row.names(m.cluster) <- df.cluster$id
+```
+
+```{r}
+m.cluster <- na.omit(m.cluster)
+```
+
+#### K-Means Clustering
+
+```{r fig.height=12, fig.width=12}
+k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
+k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
+k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
+k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
+
+# plots to compare
+p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+```
+
+### Magazine und Wochenzeitungen
+
+```{r echo=FALSE}
+df.cluster <- 
+  df.collapsed %>%
+  filter(!p_group %in% c("Andere Parteien",
+                         "Rechtsextreme Parteien",
+                         "Linke/PDS/WASG")) %>%
+  filter(category == "magazine_print") %>%
+  mutate(
+    #month = week(date),
+         year = year(date)
+        # yearweek = paste(as.character(year),
+        #                  as.character(week)), sep="-"
+        ) %>%
+  group_by(medium, p_group, year) %>%
+  summarise(wertung = mean(wertung, na.rm=T)) %>%
+  ungroup() %>%
+  spread(p_group, wertung) %>%
+  mutate(id = paste(year, medium, sep = "/")) 
+
+
+m.cluster <- as.matrix(df.cluster %>%
+                         select(- c(medium, year, id)))
+row.names(m.cluster) <- df.cluster$id
+```
+
+```{r}
+m.cluster <- na.omit(m.cluster)
+```
+
+#### K-Means Clustering
+
+```{r fig.height=12, fig.width=12}
+k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
+k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
+k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
+k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
+
+# plots to compare
+p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+```
+
+### Politische Sendungen
+
+```{r echo=FALSE}
+df.cluster <- 
+  df.collapsed %>%
+  filter(!p_group %in% c("Andere Parteien",
+                         "Rechtsextreme Parteien",
+                         "Linke/PDS/WASG")) %>%
+  filter(category == "polit_tv") %>%
+  mutate(
+    #month = week(date),
+         year = year(date)
+        # yearweek = paste(as.character(year),
+        #                  as.character(week)), sep="-"
+        ) %>%
+  group_by(medium, p_group, year) %>%
+  summarise(wertung = mean(wertung, na.rm=T)) %>%
+  ungroup() %>%
+  spread(p_group, wertung) %>%
+  mutate(id = paste(year, medium, sep = "/")) 
+
+
+m.cluster <- as.matrix(df.cluster %>%
+                         select(- c(medium, year, id)))
+row.names(m.cluster) <- df.cluster$id
+```
+
+```{r}
+m.cluster <- na.omit(m.cluster)
+```
+
+#### K-Means Clustering
+
+```{r fig.height=12, fig.width=12}
+k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
+k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
+k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
+k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
+
+# plots to compare
+p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+```
