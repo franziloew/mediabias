@@ -1,0 +1,217 @@
+---
+title: "MediaTenor Data"
+output: 
+  html_document:
+    fig_width: 10
+    theme: "lumen"
+    highlight: "tango"
+    code_folding: show
+    self_contained: true
+---
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(foreign)
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(readr)
+library(scales)
+library(htmlTable)
+library(Hmisc)
+library(labelled)
+library(lubridate)
+
+# Theming
+quartzFonts(
+  Roboto =
+    c("Roboto-Light",
+      "Roboto-Bold",
+      "Roboto-Regular",
+      "Roboto-Thin")
+)
+
+theme_set(
+  theme_bw(base_family = "Roboto", base_size = 10) +
+    theme(
+      plot.title = element_text(size = 14,
+                                margin = margin(0, 0, 4, 0, "pt")),
+      plot.subtitle = element_text(size = 8),
+      plot.caption = element_text(size = 6),
+      plot.background   = element_rect("#fafafa", "#fafafa"),
+      panel.background  = element_rect("#fafafa"),
+      panel.border = element_blank()
+    )
+)
+
+rm(list=ls())
+col <- RColorBrewer::brewer.pal(6,"Dark2")
+```
+
+```{r eval=FALSE, include=FALSE}
+library(haven)
+pp_1998_2012 <- read_dta("../data/pp_1998-2012.dta")
+```
+
+## Prepare Dataframe 
+```{r eval=FALSE, include=FALSE}
+df <- pp_1998_2012 %>%
+  # decode variables
+  mutate(p_group = to_character(p_group),
+         medium = to_character(medium),
+         wertung = as.numeric(remove_labels(wertung)),
+         
+         #Generate Date-Variable (as.Date function gives NAs)
+         date = as.Date(datum, "%Y-%b-%d"),
+         
+         # Correct UTF Problems
+         medium = factor(ifelse(grepl("ddeutsche", medium), "SZ", medium)),
+         p_group = factor(ifelse(grepl("90", p_group), "Bündnis 90/ Die Grüne", p_group))
+         )
+
+### Assign category to medium
+daily_print <- c("Die Welt", "F.A.Z.", "SZ", "Fr. Rundschau", "tageszeitung", "Bild", "Berliner")
+magazine_print <- c("Focus", "Spiegel", "Die Zeit", "Die Woche", "Rh. Merkur", "Stern", "F.A.S.", "WamS", "BamS", "Super Illu")
+news_tv <- c("Tagesthemen", "heute journal", "RTL Aktuell", "Tagesschau", "heute", "ProSieben", "Sat.1 News")
+polit_tv <- c("Fakt", "Frontal 21", "Kontraste", "Monitor", "Panorama", "Plusminus", "Report (BR)", "Report (SWR)", "WISO", "Bericht aus Berlin", "Berlin direkt")
+
+df <- df %>%
+  mutate(category = ifelse(medium %in% daily_print, "daily_print", " "),
+         category = ifelse(medium %in% magazine_print, "magazine_print", category),
+         category = ifelse(medium %in% news_tv, "news_tv", category),
+         category = ifelse(medium %in% polit_tv, "polit_tv", category))
+
+save(df, file = "../output/mediatenorFULLDF.Rda")
+```
+
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+df.collapsed <- df %>%
+  select(date, medium, p_group, wertung, category) %>%
+  group_by(date, medium, p_group, category) %>%
+  summarise(obs = n(),
+            wertung = mean(wertung, na.rm = T)) %>%
+  ungroup()
+
+save(df.collapsed, file = "../output/mediatenorCOLLAPSEDDF.Rda")
+```
+
+```{r}
+load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
+
+df.collapsed[1:20,]
+```
+
+# Explora Data
+
+```{r fig.height=12, fig.width=12}
+df.collapsed %>%
+  filter(category == "daily_print") %>%
+  ggplot(aes(date, wertung, color = p_group)) +
+  geom_col() +
+  facet_grid(medium~p_group) +
+  labs(x="", y="", title = "Tageszeitungen") +
+  theme(legend.position = "none")
+```
+
+```{r fig.height=12, fig.width=10}
+df.collapsed %>%
+  filter(category == "news_tv") %>%
+  ggplot(aes(date, wertung, color = p_group)) +
+  geom_col() +
+  facet_grid(medium~p_group) +
+  labs(x="", y="", title = "Nachrichtensendungen") +
+  theme(legend.position = "none")
+```
+
+```{r fig.height=12, fig.width=10}
+df.collapsed %>%
+  filter(category == "magazine_print") %>%
+  ggplot(aes(date, wertung, color = p_group)) +
+  geom_col() +
+  facet_grid(medium~p_group) +
+  labs(x="", y="", title = "Magazine und Wochenzeitungen") +
+  theme(legend.position = "none")
+```
+
+```{r fig.height=12, fig.width=10}
+df.collapsed %>%
+  filter(category == "polit_tv") %>%
+  ggplot(aes(date, wertung, color = p_group)) +
+  geom_col() +
+  facet_grid(medium~p_group) +
+  labs(x="", y="", title = "Politsendungen") +
+  theme(legend.position = "none")
+```
+
+# Clustering
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+```
+
+Clustering is a broad set of techniques for finding subgroups of observations within a data set. When we cluster observations, we want observations in the same group to be similar and observations in different groups to be dissimilar. Because there isn’t a response variable, this is an unsupervised method, which implies that it seeks to find relationships between the n observations without being trained by a response variable. Clustering allows us to identify which observations are alike, and potentially categorize them therein. K-means clustering is the simplest and the most commonly used clustering method for splitting a dataset into a set of k groups.
+
+## Data Preparation
+
+To perform a cluster analysis in R, generally, the data should be prepared as follows:
+
+  1. Rows are observations (individuals) and columns are variables.
+  
+  2. Any missing value in the data must be removed or estimated.
+  
+  3. The data must be standardized (i.e., scaled) to make variables comparable.
+  
+I group the data by medium & year to compute the mean value for each p_group:
+
+```{r}
+df.cluster <- 
+  df.collapsed %>%
+  filter(!p_group %in% c("Andere Parteien",
+                         "Rechtsextreme Parteien",
+                         "Linke/PDS/WASG")) %>%
+  mutate(
+    #month = week(date),
+         year = year(date)
+        # yearweek = paste(as.character(year),
+        #                  as.character(week)), sep="-"
+        ) %>%
+  group_by(medium, p_group, year) %>%
+  summarise(wertung = mean(wertung, na.rm=T)) %>%
+  ungroup() %>%
+  spread(p_group, wertung) %>%
+  mutate(id = paste(year, medium, sep = "/")) 
+
+
+m.cluster <- as.matrix(df.cluster %>%
+                         select(- c(medium, year, id)))
+row.names(m.cluster) <- df.cluster$id
+head(m.cluster)
+```
+
+```{r}
+m.cluster <- na.omit(m.cluster)
+```
+
+## K-Means Clustering
+
+K-means clustering is the most commonly used unsupervised machine learning algorithm for partitioning a given data set into a set of k groups (i.e. k clusters), where k represents the number of groups pre-specified by the analyst. It classifies objects in multiple groups (i.e., clusters), such that objects within the same cluster are as similar as possible (i.e., high intra-class similarity), whereas objects from different clusters are as dissimilar as possible (i.e., low inter-class similarity). In k-means clustering, each cluster is represented by its center (i.e, centroid) which corresponds to the mean of points assigned to the cluster.
+
+```{r fig.height=12, fig.width=12}
+k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
+k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
+k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
+k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
+
+# plots to compare
+p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
+p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
+p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
+p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+
+library(gridExtra)
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+
+```
+
+
