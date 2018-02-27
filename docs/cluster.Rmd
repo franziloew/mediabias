@@ -50,60 +50,14 @@ rm(list=ls())
 col <- RColorBrewer::brewer.pal(6,"Dark2")
 ```
 
-```{r eval=FALSE, include=FALSE}
-library(haven)
-pp_1998_2012 <- read_dta("../data/pp_1998-2012.dta")
-```
-
-## Prepare Dataframe 
-```{r eval=FALSE, include=FALSE}
-df <- pp_1998_2012 %>%
-  # decode variables
-  mutate(p_group = to_character(p_group),
-         medium = to_character(medium),
-         wertung = as.numeric(remove_labels(wertung)),
-         
-         #Generate Date-Variable (as.Date function gives NAs)
-         date = as.Date(datum, "%Y-%b-%d"),
-         month = as.numeric(monat),
-         
-         # Correct UTF Problems
-         medium = factor(ifelse(grepl("ddeutsche", medium), "SZ", medium)),
-         p_group = factor(ifelse(grepl("90", p_group), "Bündnis 90/ Die Grüne", p_group))
-         )
-
-### Assign category to medium
-daily_print <- c("Die Welt", "F.A.Z.", "SZ", "Fr. Rundschau", "tageszeitung", "Bild", "Berliner")
-magazine_print <- c("Focus", "Spiegel", "Die Zeit", "Die Woche", "Rh. Merkur", "Stern", "F.A.S.", "WamS", "BamS", "Super Illu")
-news_tv <- c("Tagesthemen", "heute journal", "RTL Aktuell", "Tagesschau", "heute", "ProSieben", "Sat.1 News")
-polit_tv <- c("Fakt", "Frontal 21", "Kontraste", "Monitor", "Panorama", "Plusminus", "Report (BR)", "Report (SWR)", "WISO", "Bericht aus Berlin", "Berlin direkt")
-
-df <- df %>%
-  mutate(category = ifelse(medium %in% daily_print, "daily_print", " "),
-         category = ifelse(medium %in% magazine_print, "magazine_print", category),
-         category = ifelse(medium %in% news_tv, "news_tv", category),
-         category = ifelse(medium %in% polit_tv, "polit_tv", category))
-
-save(df, file = "../output/mediatenorFULLDF.Rda")
-```
-
-```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
-df.collapsed <- df %>%
-  group_by(date, month, medium, p_group, category) %>%
-  summarise(obs = n(),
-            wertung = mean(wertung, na.rm = T),
-            tendenz = mean(tendenz, ra.rm = T),
-            kontext = mean(kontext, ra.rm = T)) %>%
-  ungroup()
-
-save(df.collapsed, file = "../output/mediatenorCOLLAPSEDDF.Rda")
-```
-
-# Number of Observations
+# Load Data
+For details about data prepataion see [here](https://github.com/franziloew/mediabias/blob/master/docs/data_prep.Rmd)
 
 ```{r include=FALSE}
 load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
 ```
+
+# Number of Observations
 
 ```{r echo=FALSE, fig.height=10, fig.width=8, message=FALSE, warning=FALSE}
 plot <- df.collapsed %>%
@@ -159,8 +113,6 @@ p4 <- ggplot(p, aes(year, n, color=medium,
   theme(legend.position = "right") 
 
 grid.arrange(p1, p2, p3, p4, ncol = 1)
-
-ggsave(file="observations.png")
 ```
 
 # Clustering

@@ -20,6 +20,9 @@ library(readr)
 library(scales)
 library(htmlTable)
 library(Hmisc)
+library(labelled)
+library(lubridate)
+library(gridExtra)
 
 # Theming
 quartzFonts(
@@ -48,28 +51,25 @@ col <- RColorBrewer::brewer.pal(6,"Dark2")
 ```
 
 ```{r eval=FALSE, include=FALSE}
-# Import & Manipulate Data
-pp_1998_2012 <- read.csv("../data/pp_1998-2012.csv", stringsAsFactors = F)
+library(haven)
+pp_1998_2012 <- read_dta("../data/pp_1998-2012.dta")
 ```
 
+## Prepare Dataframe 
 ```{r eval=FALSE, include=FALSE}
-### Calculate score
-df <- as.tbl(pp_1998_2012) %>%
-  filter(wertung2 != "") %>%
-  mutate(value = ifelse(wertung2=="Ablehn.", -1,0),
-         value = ifelse(wertung2== "o. eind.",0, value),
-         value = ifelse(wertung2== "Zustimm.",1,value),
+df <- pp_1998_2012 %>%
+  # decode variables
+  mutate(p_group = to_character(p_group),
+         medium = to_character(medium),
+         wertung = as.numeric(remove_labels(wertung)),
          
-         Generate Date-Variable (as.Date function gives NAs)
-         day = first.word(datum),
-         month = as.character(month),
-         year = as.character(year),
-         date = paste(month,day,year, sep="/"),
-         date = as.Date(date, "%m/%d/%Y"),
+         #Generate Date-Variable (as.Date function gives NAs)
+         date = as.Date(datum, "%Y-%b-%d"),
+         month = as.numeric(monat),
          
          # Correct UTF Problems
-         medium = factor(ifelse(grepl("ddeutsche", medium2), "SZ", medium2)),
-         p_group = factor(ifelse(grepl("90", p_group2), "Bündnis 90/ Die Grüne", p_group2))
+         medium = factor(ifelse(grepl("ddeutsche", medium), "SZ", medium)),
+         p_group = factor(ifelse(grepl("90", p_group), "Bündnis 90/ Die Grüne", p_group))
          )
 
 ### Assign category to medium
@@ -87,166 +87,168 @@ df <- df %>%
 save(df, file = "../output/mediatenorFULLDF.Rda")
 ```
 
-## Medium
-```{r}
-df %>% group_by(medium, category) %>%
-  tally(sort=TRUE) 
-```
+```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+df.collapsed <- df %>%
+  group_by(date, month, medium, p_group, category) %>%
+  summarise(obs = n(),
+            wertung = mean(wertung, na.rm = T),
+            tendenz = mean(tendenz, ra.rm = T),
+            kontext = mean(kontext, ra.rm = T)) %>%
+  ungroup()
 
-```{r}
-df %>%
-  group_by
-```
-
-## Partei
-```{r}
-df %>% group_by(p_group) %>%
-  tally(sort = TRUE) %>%
-  htmlTable(align="l")
-```
-
-## Thema
-```{r}
-theme.df <- df %>%
-  group_by(p_them2) %>%
-  summarise(m_value = mean(value, na.rm = TRUE),
-            obs = n(),
-            total_obs = nrow(df),
-            weight = obs/total_obs,
-            w_value = m_value*weight)
-```
-
-```{r fig.height=14, fig.width=8}
-ggplot(theme.df, aes(reorder(p_them2, w_value), w_value)) +
-  geom_col(fill = col[1]) +
-  labs(x="", y="weighted values") +
-  coord_flip() 
-```
-
-
-```{r eval=FALSE, include=FALSE}
-df <- df %>%
-  # calculate number of obs by medium, p_group, year
-  group_by(medium2, p_group2, year) %>%
-  add_tally() %>%
-  ungroup() %>%
-  mutate(count = n) %>%
-  select(-n) %>%
-  
-  # calculate number of obs by medium, year
-  group_by(medium2, year) %>%
-  add_tally() %>%
-  ungroup() %>%
-  mutate(sumcount = n) %>%
-  select(-n) %>%
-  
-  # calculate weight
-  mutate(weight = count/sumcount) %>%
-  
-  # calculate weighted values
-  mutate(weighted = value * weight)
-```
-
-```{r eval=FALSE, include=FALSE}
-df.reduced <- df %>% 
-  group_by(medium2, p_group2, year) %>%
-  summarise(count = n(),
-            weighted = mean(weighted),
-            wertung = mean(value),
-            weight = mean(weight)) %>%
-  ungroup() %>%
-  mutate(medium = factor(ifelse(grepl("ddeutsche", medium2), "SZ", medium2)),
-         p_group = factor(ifelse(grepl("90", p_group2), "Bündnis 90/ Die Grüne", p_group2))) %>%
-  select(- c(medium2, p_group2))
-```
-
-```{r eval=FALSE, include=FALSE}
-### Assign category to medium
-daily_print <- c("Die Welt", "F.A.Z.", "SZ", "Fr. Rundschau", "tageszeitung", "Bild", "Berliner")
-magazine_print <- c("Focus", "Spiegel", "Die Zeit", "Die Woche", "Rh. Merkur", "Stern", "F.A.S.", "WamS", "BamS", "Super Illu")
-news_tv <- c("Tagesthemen", "heute journal", "RTL Aktuell", "Tagesschau", "heute", "ProSieben")
-polit_tv <- c("Fakt", "Frontal 21", "Kontraste", "Monitor", "Panorama", "Plusminus", "Report (BR)", "Report (SWR)", "WISO", "Bericht aus Berlin", "Berlin direkt")
-
-df.reduced <- df.reduced %>%
-  mutate(category = ifelse(medium %in% daily_print, "daily_print", " "),
-         category = ifelse(medium %in% magazine_print, "magazine_print", category),
-         category = ifelse(medium %in% news_tv, "news_tv", category),
-         category = ifelse(medium %in% polit_tv, "polit_tv", category))
-
-save(df.reduced, file = "../output/mediatenor.Rda")
-```
-
-```{r eval=FALSE, include=FALSE}
-###### THEMA #########
-
-# select theme (top 20)
-df %>% group_by(p_them2) %>%
-  tally(sort = T) %>%
-  top_n(20) %>%
-  select(p_them2) %>%
-  mutate(p_thema = ifelse(grepl("anderer Aspekt", p_them2), 
-                          "anderer Aspekt des öffentlichen Auftretens", p_them2),
-         
-         p_thema = ifelse(grepl("enpolitik insgesamt", p_them2), 
-                          "Außenpolitik insgesamt", p_thema),
-         
-         p_thema = ifelse(grepl("Programmatik, Konzepte", p_them2), 
-                          "Programmatik, Konzepte, Pläne allgemein", p_thema),
-         
-          p_thema = ifelse(grepl("Steuerpolitik allgemein/anderes", p_them2), 
-                          "Steuerpolitik allgemein/anderes (nicht Ökosteuer, nicht Soli", p_thema),
-         
-         p_thema = ifelse(grepl("Regierungsf", p_them2), 
-                          "Regierungsfähigkeit, Regierungstätigkeit", p_thema),
-         
-         p_thema = ifelse(grepl("Koalition, Zusammenarbeit von CDU/CSU und SPD", p_them2), 
-                          "große Koalition, Zusammenarbeit von CDU/CSU und SPD", p_thema),
-         
-         p_thema = ifelse(grepl("nderpolitik", p_them2), 
-                          "Ausländerpolitik", p_thema)) -> thema
-
-htmlTable::htmlTable(thema, align="l")
-```
-
-```{r eval=FALSE, include=FALSE}
-df.thema <- df %>% 
-  
-  mutate(p_thema = ifelse(grepl("anderer Aspekt", p_them2), 
-                          "anderer Aspekt des öffentlichen Auftretens", p_them2),
-         
-         p_thema = ifelse(grepl("enpolitik insgesamt", p_them2), 
-                          "Außenpolitik insgesamt", p_thema),
-         
-         p_thema = ifelse(grepl("Programmatik, Konzepte", p_them2), 
-                          "Programmatik, Konzepte, Pläne allgemein", p_thema),
-         
-          p_thema = ifelse(grepl("Steuerpolitik allgemein/anderes", p_them2), 
-                          "Steuerpolitik allgemein/anderes (nicht Ökosteuer, nicht Soli", p_thema),
-         
-         p_thema = ifelse(grepl("Regierungsf", p_them2), 
-                          "Regierungsfähigkeit, Regierungstätigkeit", p_thema),
-         
-         p_thema = ifelse(grepl("Koalition, Zusammenarbeit von CDU/CSU und SPD", p_them2), 
-                          "große Koalition, Zusammenarbeit von CDU/CSU und SPD", p_thema),
-         
-         p_thema = ifelse(grepl("nderpolitik", p_them2), 
-                          "Ausländerpolitik", p_thema)) %>%
-  
-  group_by(medium2, p_group2, p_thema) %>%
-  filter(p_thema %in% thema$p_thema) %>%
-  summarise(weighted = mean(weighted),
-            wertung = mean(value),
-            weight = mean(weight)) %>%
-  ungroup() %>%
-  mutate(medium = factor(ifelse(grepl("ddeutsche", medium2), "SZ", medium2)),
-         p_group = factor(ifelse(grepl("90", p_group2), "Bündnis 90/ Die Grüne", p_group2))) %>%
-  select(- c(medium2, p_group2))
+save(df.collapsed, file = "../output/mediatenorCOLLAPSEDDF.Rda")
 ```
 
 # Load Data
 
-For details about data description see [here](https://github.com/franziloew/mediabias/blob/master/docs/mediatenor.Rmd)
+For details about data prepataion see [here](https://github.com/franziloew/mediabias/blob/master/docs/data_prep.Rmd)
 
 ```{r message=FALSE, warning=FALSE}
-load(file = "../output/mediatenor.Rda")
+load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
 ```
+
+# Number of Observations
+```{r Number of Observations, echo=FALSE, fig.height=10, fig.width=8, message=FALSE, warning=FALSE}
+plot <- df.collapsed %>%
+  mutate(year = year(date)) %>%
+  group_by(year, medium, category) %>%
+  summarise(n=n(),
+            obs = sum(obs)) %>%
+  ungroup()
+
+p <- plot %>%
+  filter(category == "daily_print")
+  
+p1 <- ggplot(p, aes(year, n, color=medium,
+             group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Tageszeitungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+p <- plot %>%
+  filter(category == "magazine_print")
+  
+p2 <- ggplot(p, aes(year, n, color=medium,
+                    group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Magazine und Wochenzeitungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+
+p <- plot %>%
+  filter(category == "news_tv")
+
+p3 <- ggplot(p, aes(year, n, color=medium,
+                      group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Nachrichtensendungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+p <- plot %>%
+  filter(category == "polit_tv")
+
+p4 <- ggplot(p, aes(year, n, color=medium,
+                    group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Politiksendungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+grid.arrange(p1, p2, p3, p4, ncol = 1)
+```
+
+# Cluster
+```{r}
+library(cluster)    # clustering algorithms
+library(factoextra) # clustering algorithms & visualization
+```
+
+## Tageszeitungen
+```{r}
+df.cluster <- 
+  df.collapsed %>%
+  filter(!p_group %in% c("Andere Parteien",
+                         "Rechtsextreme Parteien")) %>%
+  mutate(year = year(date)) %>%
+  filter(year < 2006) %>%
+  filter(category == "daily_print") %>%
+  group_by(medium, p_group, month) %>%
+  summarise(wertung = mean(wertung, na.rm=T),
+            tendenz = mean(tendenz, ra.rm = T),
+            kontext = mean(kontext, ra.rm = T),
+            obs = sum(obs)) %>%
+  ungroup() %>%
+  group_by(medium, month) %>%
+  mutate(totalobs = sum(obs)) %>%
+  ungroup() %>%
+  mutate(weight = obs/totalobs,
+         weighted = wertung*weight)
+```
+
+
+### Weighted DF
+```{r echo=FALSE}
+sequence <- unique(df.cluster$month)
+party <- c("CDU/CSU", "SPD")
+k_list <- list()
+x = 1
+
+for (i in sequence) {
+  
+  # Long to wide format DF
+  df.weighted <- df.cluster %>%
+    filter(month == i) %>%
+    filter(p_group %in% party) %>%
+    select(medium, p_group, weighted) %>%
+    spread(p_group, weighted)
+  
+  # Convert to Matrix & assign rownames
+  m.weighted <- as.matrix(df.weighted %>%
+                            select(- medium))
+  row.names(m.weighted) <- df.weighted$medium
+  m.weighted <- na.omit(m.weighted)
+  
+  # Scale Data
+  m.weighted <- scale(m.weighted)
+  
+  # K-means clustering
+  k<- kmeans(m.weighted, centers = 2, nstart = 25)
+  
+  # Generate DF
+  temp <- m.weighted %>% as_tibble() %>%
+    mutate(cluster = k$cluster,
+           medium = rownames(m.weighted),
+           month = i)
+  
+  # Add to list
+  k_list[[x]] <- temp
+  x = x+1
+  
+  p <- ggplot(temp, aes(`CDU/CSU`, SPD, 
+                        color=factor(cluster),
+             label = medium)) +
+  geom_point(show.legend = F) + 
+  ggrepel::geom_text_repel(show.legend = F) +
+  scale_x_continuous(limits = c(-2,2)) +
+  scale_y_continuous(limits = c(-2,2)) +
+    labs(title = paste("Year/Month=",i)) +
+    geom_polygon(
+      alpha = 0.4, 
+                 show.legend = F)
+  
+  # Save
+  ggsave(p, file = paste0("figs/cluster_daily_print/cluster",i,".png"))
+  
+}
+```
+
+
+
+
