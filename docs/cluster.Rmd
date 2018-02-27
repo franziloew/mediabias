@@ -231,7 +231,7 @@ k4
 We can also view our results by using *fviz_cluster*. This provides a nice illustration of the clusters. If there are more than two dimensions (variables) *fviz_cluster* will perform principal component analysis (PCA) and plot the data points according to the first two principal components that explain the majority of the variance.
 
 #### Unweighted
-```{r echo=FALSE, fig.height=10, fig.width=14}
+```{r echo=FALSE, fig.height=10, fig.width=14, message=FALSE, warning=FALSE}
 p1 <- fviz_cluster(k4, data = m.unweighted, 
              choose.vars = c("SPD","CDU/CSU")) +
   labs(title = "") + theme(legend.position = "none")
