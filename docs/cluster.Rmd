@@ -22,6 +22,7 @@ library(htmlTable)
 library(Hmisc)
 library(labelled)
 library(lubridate)
+library(gridExtra)
 
 # Theming
 quartzFonts(
@@ -64,6 +65,7 @@ df <- pp_1998_2012 %>%
          
          #Generate Date-Variable (as.Date function gives NAs)
          date = as.Date(datum, "%Y-%b-%d"),
+         month = as.numeric(monat),
          
          # Correct UTF Problems
          medium = factor(ifelse(grepl("ddeutsche", medium), "SZ", medium)),
@@ -87,17 +89,78 @@ save(df, file = "../output/mediatenorFULLDF.Rda")
 
 ```{r eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
 df.collapsed <- df %>%
-  select(date, medium, p_group, wertung, category) %>%
-  group_by(date, medium, p_group, category) %>%
+  group_by(date, month, medium, p_group, category) %>%
   summarise(obs = n(),
-            wertung = mean(wertung, na.rm = T)) %>%
+            wertung = mean(wertung, na.rm = T),
+            tendenz = mean(tendenz, ra.rm = T),
+            kontext = mean(kontext, ra.rm = T)) %>%
   ungroup()
 
 save(df.collapsed, file = "../output/mediatenorCOLLAPSEDDF.Rda")
 ```
 
+# Number of Observations
+
 ```{r include=FALSE}
 load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
+```
+
+```{r echo=FALSE, fig.height=10, fig.width=8, message=FALSE, warning=FALSE}
+plot <- df.collapsed %>%
+  mutate(year = year(date)) %>%
+  group_by(year, medium, category) %>%
+  summarise(n=n(),
+            obs = sum(obs)) %>%
+  ungroup()
+
+p <- plot %>%
+  filter(category == "daily_print")
+  
+p1 <- ggplot(p, aes(year, n, color=medium,
+             group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Tageszeitungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+p <- plot %>%
+  filter(category == "magazine_print")
+  
+p2 <- ggplot(p, aes(year, n, color=medium,
+                    group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Magazine und Wochenzeitungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+
+p <- plot %>%
+  filter(category == "news_tv")
+
+p3 <- ggplot(p, aes(year, n, color=medium,
+                      group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Nachrichtensendungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+p <- plot %>%
+  filter(category == "polit_tv")
+
+p4 <- ggplot(p, aes(year, n, color=medium,
+                    group = medium)) +
+  geom_point() + geom_line() +
+  scale_x_continuous(limits = c(1998,2012), breaks = 1998:2012) +
+  labs(x="", y="", color="", title = "Politiksendungen") +
+  guides(col = guide_legend(ncol = 1)) +
+  theme(legend.position = "right") 
+
+grid.arrange(p1, p2, p3, p4, ncol = 1)
+
+ggsave(file="observations.png")
 ```
 
 # Clustering
@@ -131,6 +194,8 @@ df.cluster <-
                          "Rechtsextreme Parteien")) %>%
   group_by(medium, p_group) %>%
   summarise(wertung = mean(wertung, na.rm=T),
+            tendenz = mean(tendenz, ra.rm = T),
+            kontext = mean(kontext, ra.rm = T),
             obs = sum(obs)) %>%
   ungroup() %>%
   group_by(medium) %>%
@@ -141,7 +206,7 @@ df.cluster <-
 ```
 
 ### Unweighted DF
-```{r echo=FALSE}
+```{r echo=FALSE, message=FALSE, warning=FALSE}
 df.unweighted <- df.cluster %>%
   select(medium, p_group, wertung) %>%
   spread(p_group, wertung) 
@@ -149,7 +214,10 @@ df.unweighted <- df.cluster %>%
 m.unweighted <- as.matrix(df.unweighted %>%
                             select(- medium))
 row.names(m.unweighted) <- df.unweighted$medium
-head(m.unweighted)
+m.unweighted <- na.omit(m.unweighted)
+
+# Show table
+htmlTable::htmlTable(round(m.unweighted,3))
 ```
 
 ### Weighted DF
@@ -161,21 +229,21 @@ df.weighted <- df.cluster %>%
 m.weighted <- as.matrix(df.weighted %>%
                             select(- medium))
 row.names(m.weighted) <- df.weighted$medium
-head(m.weighted)
-```
-
-```{r}
-m.unweighted <- na.omit(m.unweighted)
 m.weighted <- na.omit(m.weighted)
+
+# Show table
+htmlTable::htmlTable(round(m.weighted,3))
 ```
 
 ## K-Means Clustering
 
-K-means clustering is the most commonly used unsupervised machine learning algorithm for partitioning a given data set into a set of k groups (i.e. k clusters), where k represents the number of groups pre-specified by the analyst. It classifies objects in multiple groups (i.e., clusters), such that objects within the same cluster are as similar as possible (i.e., high intra-class similarity), whereas objects from different clusters are as dissimilar as possible (i.e., low inter-class similarity). In k-means clustering, each cluster is represented by its center (i.e, centroid) which corresponds to the mean of points assigned to the cluster.
+* Most commonly used unsupervised ML algorithm for partitioning a given data set into a set of k clusters, where k represents the number of pre-specified groups.
 
-### The Basic Idea
+* It classifies objects in multiple clusters, where each cluster is represented by its center (i.e, centroid) which corresponds to the mean of points assigned to the cluster.
 
-The basic idea behind k-means clustering consists of defining clusters so that the total intra-cluster variation (known as total within-cluster variation) is minimized. There are several k-means algorithms available. The standard algorithm is the Hartigan-Wong algorithm (1979), which defines the total within-cluster variation as the sum of squared distances Euclidean distances between items and the corresponding centroid:
+* k-means clustering consists of defining clusters so that the total intra-cluster variation (known as total within-cluster variation) is minimized. 
+
+* The standard algorithm is the Hartigan-Wong algorithm (1979), which defines the total within-cluster variation as the sum of squared distances Euclidean distances between items and the corresponding centroid:
 
 $$
 W(C_k)=\sum_{x_i\in C_k}(x_i-\mu_k)^2
@@ -279,7 +347,6 @@ p10 <- fviz_cluster(k4, data = m.unweighted,
                              "Linke/PDS/WASG")) +
   labs(title = "") + theme(legend.position = "none")
 
-library(gridExtra)
 grid.arrange(p1, p2, p3, p4, p5, 
              p6, p7, p8, p9, p10, nrow = 2)
 ```
