@@ -96,19 +96,20 @@ df.collapsed <- df %>%
 save(df.collapsed, file = "../output/mediatenorCOLLAPSEDDF.Rda")
 ```
 
-```{r}
+```{r include=FALSE}
 load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
-
-df.collapsed[1:20,]
 ```
 
 # Clustering
-```{r message=FALSE, warning=FALSE, include=FALSE}
+```{r include=FALSE}
 library(cluster)    # clustering algorithms
 library(factoextra) # clustering algorithms & visualization
 ```
 
-Clustering is a broad set of techniques for finding subgroups of observations within a data set. When we cluster observations, we want observations in the same group to be similar and observations in different groups to be dissimilar. Because there isn’t a response variable, this is an unsupervised method, which implies that it seeks to find relationships between the n observations without being trained by a response variable. Clustering allows us to identify which observations are alike, and potentially categorize them therein. K-means clustering is the simplest and the most commonly used clustering method for splitting a dataset into a set of k groups.
+
+* techniques for finding subgroups of observations within a data set based on their similarity.
+* unsupervised method: find relationships between the n observations without being trained by a response variable. 
+* K-means clustering is the simplest and the most commonly used clustering method for splitting a dataset into a set of k groups.
 
 ## Data Preparation
 
@@ -128,21 +129,22 @@ df.cluster <-
   filter(!p_group %in% c("Andere Parteien",
                          "Rechtsextreme Parteien",
                          "Linke/PDS/WASG")) %>%
-  mutate(
-    #month = week(date),
-         year = year(date)
-        # yearweek = paste(as.character(year),
-        #                  as.character(week)), sep="-"
-        ) %>%
-  group_by(medium, p_group, year) %>%
+  # mutate(
+  #   #month = week(date),
+  #        year = year(date)
+  #       # yearweek = paste(as.character(year),
+  #       #                  as.character(week)), sep="-"
+  #       ) %>%
+  group_by(medium, p_group) %>%
   summarise(wertung = mean(wertung, na.rm=T)) %>%
   ungroup() %>%
   spread(p_group, wertung) %>%
-  mutate(id = paste(year, medium, sep = "/")) 
+  mutate(id = medium)
+  #mutate(id = paste(year, medium, sep = "/")) 
 
 
 m.cluster <- as.matrix(df.cluster %>%
-                         select(- c(medium, year, id)))
+                         select(- c(medium, id)))
 row.names(m.cluster) <- df.cluster$id
 head(m.cluster)
 ```
@@ -154,6 +156,75 @@ m.cluster <- na.omit(m.cluster)
 ## K-Means Clustering
 
 K-means clustering is the most commonly used unsupervised machine learning algorithm for partitioning a given data set into a set of k groups (i.e. k clusters), where k represents the number of groups pre-specified by the analyst. It classifies objects in multiple groups (i.e., clusters), such that objects within the same cluster are as similar as possible (i.e., high intra-class similarity), whereas objects from different clusters are as dissimilar as possible (i.e., low inter-class similarity). In k-means clustering, each cluster is represented by its center (i.e, centroid) which corresponds to the mean of points assigned to the cluster.
+
+### The Basic Idea
+
+The basic idea behind k-means clustering consists of defining clusters so that the total intra-cluster variation (known as total within-cluster variation) is minimized. There are several k-means algorithms available. The standard algorithm is the Hartigan-Wong algorithm (1979), which defines the total within-cluster variation as the sum of squared distances Euclidean distances between items and the corresponding centroid:
+
+$$
+W(C_k)=\sum_{x_i\in C_k}(x_i-\mu_k)^2
+$$
+where:
+
+  * $x_i$ is a data point belonging to Cluster $C_k$
+  * $\mu_k$ is the mean value of the points assigned to the cluster $C_k$
+  
+Each observation ($x_i$) is assigned to a given cluster such that the sum of squares (SS) distance of the observation to their assigned cluster centers ($\mu_k$) is minimized.
+
+The object function to be minimized is the **total within-cluster sum of square**:
+
+$$
+\text{tot.withiness} = \sum^k_{k=1}W(C_k)=\sum^k_{k=1}\sum_{x_i\in C_k}(x_i-\mu_k)^2
+$$
+### K-means Algorithm
+
+K-means algorithm can be summarized as follows:
+
+  1. Specify the number of clusters (K) to be created (by the analyst).
+  
+  2. Select randomly k objects from the data set as the initial cluster centers or means.
+  
+  3. Assigns each observation to their closest centroid, based on the Euclidean distance between the object and the centroid.
+  
+  4. For each of the k clusters update the cluster centroid by calculating the new mean values of all the data points in the cluster. The centroid of a $Kth$ cluster is a vector of length $p$ containing the means of all variables for the observations in the $kth$ cluster; $p$ is the number of variables.
+  
+  5. Iteratively minimize the total within sum of square (Equation above). That is, iterate steps 3 and 4 until the cluster assignments stop changing or the maximum number of iterations is reached. 
+
+```{r}
+k3<- kmeans(m.cluster, centers = 4, nstart = 25)
+str(k3)
+```
+
+The output of *kmeans* is a list with several bits of information. The most important being:
+
+  * cluster: A vector of integers (from 1:k) indicating the cluster to which each point is allocated.
+  * centers: A matrix of cluster centers.
+  * totss: The total sum of squares.
+  * withinss: Vector of within-cluster sum of squares, one component per cluster.
+  * tot.withinss: Total within-cluster sum of squares, i.e. sum(withinss).
+  * betweenss: The between-cluster sum of squares, i.e. $totss-tot.withinss$.
+  * size: The number of points in each cluster.
+
+If we print the results we’ll see that our groupings resulted in 3 cluster sizes of 29, 49, 287. We see the cluster centers (means) for the three groups across the four variables (Bündnis 90/ Die Grüne, CDU/CSU, FDP, SPD). We also get the cluster assignment for each observation (i.e. BamS was assigned to cluster 3 in year 2001, Bericht aus Berlin was assigned to cluster 1 in 2005, etc.).
+
+```{r}
+k3
+```
+
+We can also view our results by using *fviz_cluster*. This provides a nice illustration of the clusters. If there are more than two dimensions (variables) *fviz_cluster* will perform principal component analysis (PCA) and plot the data points according to the first two principal components that explain the majority of the variance.
+
+```{r}
+fviz_cluster(k3, data = m.cluster, choose.vars = c("SPD","FDP"))
+ggsave(file="cluster.png")
+```
+
+Alternatively, you can use standard pairwise scatter plots to illustrate the clusters compared to the original variables.
+
+```{r}
+fviz_cluster(k3, data = m.cluster, choose.vars = c("SPD","CDU/CSU"))
+ggsave(file="cluster.png")
+```
+
 
 ```{r fig.height=12, fig.width=12}
 k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
