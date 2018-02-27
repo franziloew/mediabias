@@ -123,34 +123,50 @@ To perform a cluster analysis in R, generally, the data should be prepared as fo
   
 I group the data by medium & year to compute the mean value for each p_group:
 
-```{r}
+
+```{r include=FALSE}
 df.cluster <- 
   df.collapsed %>%
   filter(!p_group %in% c("Andere Parteien",
-                         "Rechtsextreme Parteien",
-                         "Linke/PDS/WASG")) %>%
-  # mutate(
-  #   #month = week(date),
-  #        year = year(date)
-  #       # yearweek = paste(as.character(year),
-  #       #                  as.character(week)), sep="-"
-  #       ) %>%
+                         "Rechtsextreme Parteien")) %>%
   group_by(medium, p_group) %>%
-  summarise(wertung = mean(wertung, na.rm=T)) %>%
+  summarise(wertung = mean(wertung, na.rm=T),
+            obs = sum(obs)) %>%
   ungroup() %>%
-  spread(p_group, wertung) %>%
-  mutate(id = medium)
-  #mutate(id = paste(year, medium, sep = "/")) 
+  group_by(medium) %>%
+  mutate(totalobs = sum(obs)) %>%
+  ungroup() %>%
+  mutate(weight = obs/totalobs,
+         weighted = wertung*weight)
+```
 
+### Unweighted DF
+```{r echo=FALSE}
+df.unweighted <- df.cluster %>%
+  select(medium, p_group, wertung) %>%
+  spread(p_group, wertung) 
 
-m.cluster <- as.matrix(df.cluster %>%
-                         select(- c(medium, id)))
-row.names(m.cluster) <- df.cluster$id
-head(m.cluster)
+m.unweighted <- as.matrix(df.unweighted %>%
+                            select(- medium))
+row.names(m.unweighted) <- df.unweighted$medium
+head(m.unweighted)
+```
+
+### Weighted DF
+```{r echo=FALSE}
+df.weighted <- df.cluster %>%
+  select(medium, p_group, weighted) %>%
+  spread(p_group, weighted) 
+
+m.weighted <- as.matrix(df.weighted %>%
+                            select(- medium))
+row.names(m.weighted) <- df.weighted$medium
+head(m.weighted)
 ```
 
 ```{r}
-m.cluster <- na.omit(m.cluster)
+m.unweighted <- na.omit(m.unweighted)
+m.weighted <- na.omit(m.weighted)
 ```
 
 ## K-Means Clustering
@@ -190,9 +206,9 @@ K-means algorithm can be summarized as follows:
   
   5. Iteratively minimize the total within sum of square (Equation above). That is, iterate steps 3 and 4 until the cluster assignments stop changing or the maximum number of iterations is reached. 
 
-```{r}
-k3<- kmeans(m.cluster, centers = 4, nstart = 25)
-str(k3)
+```{r include=FALSE}
+k4<- kmeans(m.unweighted, centers = 4, nstart = 25)
+k4_2<- kmeans(m.weighted, centers = 4, nstart = 25)
 ```
 
 The output of *kmeans* is a list with several bits of information. The most important being:
@@ -207,239 +223,117 @@ The output of *kmeans* is a list with several bits of information. The most impo
 
 If we print the results we’ll see that our groupings resulted in 3 cluster sizes of 29, 49, 287. We see the cluster centers (means) for the three groups across the four variables (Bündnis 90/ Die Grüne, CDU/CSU, FDP, SPD). We also get the cluster assignment for each observation (i.e. BamS was assigned to cluster 3 in year 2001, Bericht aus Berlin was assigned to cluster 1 in 2005, etc.).
 
-```{r}
-k3
+```{r eval=FALSE, include=FALSE}
+k4
 ```
+
 
 We can also view our results by using *fviz_cluster*. This provides a nice illustration of the clusters. If there are more than two dimensions (variables) *fviz_cluster* will perform principal component analysis (PCA) and plot the data points according to the first two principal components that explain the majority of the variance.
 
-```{r}
-fviz_cluster(k3, data = m.cluster, choose.vars = c("SPD","FDP"))
-ggsave(file="cluster.png")
-```
+#### Unweighted
+```{r echo=FALSE, fig.height=10, fig.width=14}
+p1 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("SPD","CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
-Alternatively, you can use standard pairwise scatter plots to illustrate the clusters compared to the original variables.
+p2 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("FDP","CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
-```{r}
-fviz_cluster(k3, data = m.cluster, choose.vars = c("SPD","CDU/CSU"))
-ggsave(file="cluster.png")
-```
+p3 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("Bündnis 90/ Die Grüne",
+                             "CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
+p4 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("Linke/PDS/WASG",
+                             "CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
-```{r fig.height=12, fig.width=12}
-k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
-k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
-k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
-k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
+p5 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("SPD","FDP")) +
+  labs(title = "") + theme(legend.position = "none")
 
-# plots to compare
-p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
-p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
-p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
-p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+p6 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("SPD",
+                             "Bündnis 90/ Die Grüne")) +
+  labs(title = "") + theme(legend.position = "none") 
 
-library(gridExtra)
-grid.arrange(p1, p2, p3, p4, nrow = 2)
+p7 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("SPD",
+                             "Linke/PDS/WASG")) +
+  labs(title = "") + theme(legend.position = "none") 
 
-```
+p8 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("Bündnis 90/ Die Grüne",
+                             "FDP")) +
+  labs(title = "") + theme(legend.position = "none")
 
-### Tageszeitungen
+p9 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("Bündnis 90/ Die Grüne",
+                             "Linke/PDS/WASG")) +
+  labs(title = "") + theme(legend.position = "none")
 
-```{r}
-df.cluster <- 
-  df.collapsed %>%
-  filter(!p_group %in% c("Andere Parteien",
-                         "Rechtsextreme Parteien",
-                         "Linke/PDS/WASG")) %>%
-  filter(category == "daily_print") %>%
-  mutate(
-    #month = week(date),
-         year = year(date)
-        # yearweek = paste(as.character(year),
-        #                  as.character(week)), sep="-"
-        ) %>%
-  group_by(medium, p_group, year) %>%
-  summarise(wertung = mean(wertung, na.rm=T)) %>%
-  ungroup() %>%
-  spread(p_group, wertung) %>%
-  mutate(id = paste(year, medium, sep = "/")) 
-
-
-m.cluster <- as.matrix(df.cluster %>%
-                         select(- c(medium, year, id)))
-row.names(m.cluster) <- df.cluster$id
-head(m.cluster)
-```
-
-```{r}
-m.cluster <- na.omit(m.cluster)
-```
-
-#### K-Means Clustering
-
-```{r fig.height=12, fig.width=12}
-k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
-k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
-k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
-k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
-
-# plots to compare
-p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
-p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
-p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
-p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+p10 <- fviz_cluster(k4, data = m.unweighted, 
+             choose.vars = c("FDP",
+                             "Linke/PDS/WASG")) +
+  labs(title = "") + theme(legend.position = "none")
 
 library(gridExtra)
-grid.arrange(p1, p2, p3, p4, nrow = 2)
-
+grid.arrange(p1, p2, p3, p4, p5, 
+             p6, p7, p8, p9, p10, nrow = 2)
 ```
 
-### Nachrichtensendungen
+#### Weighted
+```{r echo=FALSE, fig.height=10, fig.width=14}
+p1 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("SPD","CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
-```{r echo=FALSE}
-df.cluster <- 
-  df.collapsed %>%
-  filter(!p_group %in% c("Andere Parteien",
-                         "Rechtsextreme Parteien",
-                         "Linke/PDS/WASG")) %>%
-  filter(category == "news_tv") %>%
-  mutate(
-    #month = week(date),
-         year = year(date)
-        # yearweek = paste(as.character(year),
-        #                  as.character(week)), sep="-"
-        ) %>%
-  group_by(medium, p_group, year) %>%
-  summarise(wertung = mean(wertung, na.rm=T)) %>%
-  ungroup() %>%
-  spread(p_group, wertung) %>%
-  mutate(id = paste(year, medium, sep = "/")) 
+p2 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("FDP","CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
+p3 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("Bündnis 90/ Die Grüne",
+                             "CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
-m.cluster <- as.matrix(df.cluster %>%
-                         select(- c(medium, year, id)))
-row.names(m.cluster) <- df.cluster$id
-```
+p4 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("Linke/PDS/WASG",
+                             "CDU/CSU")) +
+  labs(title = "") + theme(legend.position = "none")
 
-```{r}
-m.cluster <- na.omit(m.cluster)
-```
+p5 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("SPD","FDP")) +
+  labs(title = "") + theme(legend.position = "none")
 
-#### K-Means Clustering
+p6 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("SPD",
+                             "Bündnis 90/ Die Grüne")) +
+  labs(title = "") + theme(legend.position = "none") 
 
-```{r fig.height=12, fig.width=12}
-k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
-k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
-k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
-k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
+p7 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("SPD",
+                             "Linke/PDS/WASG")) +
+  labs(title = "") + theme(legend.position = "none") 
 
-# plots to compare
-p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
-p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
-p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
-p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
+p8 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("Bündnis 90/ Die Grüne",
+                             "FDP")) +
+  labs(title = "") + theme(legend.position = "none")
+
+p9 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("Bündnis 90/ Die Grüne",
+                             "Linke/PDS/WASG")) +
+  labs(title = "") + theme(legend.position = "none")
+
+p10 <- fviz_cluster(k4_2, data = m.weighted, 
+             choose.vars = c("FDP",
+                             "Linke/PDS/WASG")) +
+  labs(title = "") + theme(legend.position = "none")
 
 library(gridExtra)
-grid.arrange(p1, p2, p3, p4, nrow = 2)
-
-```
-
-### Magazine und Wochenzeitungen
-
-```{r echo=FALSE}
-df.cluster <- 
-  df.collapsed %>%
-  filter(!p_group %in% c("Andere Parteien",
-                         "Rechtsextreme Parteien",
-                         "Linke/PDS/WASG")) %>%
-  filter(category == "magazine_print") %>%
-  mutate(
-    #month = week(date),
-         year = year(date)
-        # yearweek = paste(as.character(year),
-        #                  as.character(week)), sep="-"
-        ) %>%
-  group_by(medium, p_group, year) %>%
-  summarise(wertung = mean(wertung, na.rm=T)) %>%
-  ungroup() %>%
-  spread(p_group, wertung) %>%
-  mutate(id = paste(year, medium, sep = "/")) 
-
-
-m.cluster <- as.matrix(df.cluster %>%
-                         select(- c(medium, year, id)))
-row.names(m.cluster) <- df.cluster$id
-```
-
-```{r}
-m.cluster <- na.omit(m.cluster)
-```
-
-#### K-Means Clustering
-
-```{r fig.height=12, fig.width=12}
-k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
-k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
-k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
-k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
-
-# plots to compare
-p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
-p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
-p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
-p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
-
-library(gridExtra)
-grid.arrange(p1, p2, p3, p4, nrow = 2)
-
-```
-
-### Politische Sendungen
-
-```{r echo=FALSE}
-df.cluster <- 
-  df.collapsed %>%
-  filter(!p_group %in% c("Andere Parteien",
-                         "Rechtsextreme Parteien",
-                         "Linke/PDS/WASG")) %>%
-  filter(category == "polit_tv") %>%
-  mutate(
-    #month = week(date),
-         year = year(date)
-        # yearweek = paste(as.character(year),
-        #                  as.character(week)), sep="-"
-        ) %>%
-  group_by(medium, p_group, year) %>%
-  summarise(wertung = mean(wertung, na.rm=T)) %>%
-  ungroup() %>%
-  spread(p_group, wertung) %>%
-  mutate(id = paste(year, medium, sep = "/")) 
-
-
-m.cluster <- as.matrix(df.cluster %>%
-                         select(- c(medium, year, id)))
-row.names(m.cluster) <- df.cluster$id
-```
-
-```{r}
-m.cluster <- na.omit(m.cluster)
-```
-
-#### K-Means Clustering
-
-```{r fig.height=12, fig.width=12}
-k2 <- kmeans(m.cluster, centers = 2, nstart = 25)
-k3 <- kmeans(m.cluster, centers = 3, nstart = 25)
-k4 <- kmeans(m.cluster, centers = 4, nstart = 25)
-k5 <- kmeans(m.cluster, centers = 5, nstart = 25)
-
-# plots to compare
-p1 <- fviz_cluster(k2, data = m.cluster) + ggtitle("k = 2")
-p2 <- fviz_cluster(k3,  data = m.cluster) + ggtitle("k = 3")
-p3 <- fviz_cluster(k4,  data = m.cluster) + ggtitle("k = 4")
-p4 <- fviz_cluster(k5,  data = m.cluster) + ggtitle("k = 5")
-
-library(gridExtra)
-grid.arrange(p1, p2, p3, p4, nrow = 2)
-
+grid.arrange(p1, p2, p3, p4, p5, 
+             p6, p7, p8, p9, p10, nrow = 2)
 ```
