@@ -1,0 +1,151 @@
+---
+title: "MediaTenor Data"
+output: 
+  html_document:
+    fig_width: 10
+    theme: "lumen"
+    highlight: "tango"
+    code_folding: show
+    self_contained: true
+---
+
+
+```{r message=FALSE, warning=FALSE, include=FALSE}
+library(foreign)
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+library(lubridate)
+library(readr)
+library(scales)
+library(htmlTable)
+library(Hmisc)
+library(labelled)
+library(lubridate)
+library(gridExtra)
+
+# Theming
+quartzFonts(
+  Roboto =
+    c("Roboto-Light",
+      "Roboto-Bold",
+      "Roboto-Regular",
+      "Roboto-Thin")
+)
+
+theme_set(
+  theme_bw(base_family = "Roboto", base_size = 10) +
+    theme(
+      plot.title = element_text(size = 14,
+                                margin = margin(0, 0, 4, 0, "pt")),
+      plot.subtitle = element_text(size = 8),
+      plot.caption = element_text(size = 6),
+      plot.background   = element_rect("#fafafa", "#fafafa"),
+      panel.background  = element_rect("#fafafa"),
+      panel.border = element_blank()
+    )
+)
+
+rm(list=ls())
+col <- RColorBrewer::brewer.pal(6,"Dark2")
+```
+
+# Load Data
+
+For details about data prepataion see [here](https://github.com/franziloew/mediabias/blob/master/docs/data_prep.Rmd)
+
+```{r message=FALSE, warning=FALSE}
+load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
+
+head(df.collapsed)
+```
+
+### Subset data
+
+```{r}
+df.collapsed %>%
+  filter(category == "daily_print") %>%
+  filter(p_group == "CDU/CSU") %>%
+  filter(date > "2003-01-01" &
+           date < "2004-01-01") %>%
+  select(date, wertung, medium) -> test.df
+
+ggplot(test.df, aes(date, wertung, color = medium)) +
+  geom_line() + labs(x="", y="", color="") +
+  scale_x_date(breaks = date_breaks("1 month"), 
+               labels=date_format("%b-%Y", tz="CET")) +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+### Convert to time series
+```{r message=FALSE}
+library(xts)
+
+daily_news.df <- test.df %>% spread(medium, wertung)
+
+ts.df <- as.xts(daily_news.df %>% select(-date), 
+                daily_news.df$date)
+ts.df <- ts(ts.df)
+ts.df[is.na(ts.df)] <- 0
+
+head(ts.df)
+```
+
+```{r}
+x <- ts.df[,2]
+y <- ts.df[,4]
+```
+
+### Compute Dynamic Time Warp and find optimal alignment between time series.
+
+```{r}
+library(dtw)
+alignment<-dtw(x,y,keep=TRUE)
+
+plot(alignment,type="two",off=1,match.lty=2,match.indices=20)
+```
+
+Cost Matrix
+```{r fig.height=6, fig.width=10}
+lcm <- alignment$costMatrix
+
+#### PLOT multiple Time series #####
+#lcm <- alignment$localCostMatrix
+
+# plot <- lcm %>% as_tibble() %>%
+#   mutate(date = daily_news.df$date) %>%
+#   gather(medium, distance, -date)
+# 
+# ggplot(plot, aes(date, medium)) +
+#   geom_tile(aes(fill=distance), color = "white") +
+#   scale_fill_gradient(low = "white", high = "steelblue") +
+#   labs(x="",y="",fill="Dynamic Time Warp\nCost Matrix")
+```
+
+### K-medoids clustering
+```{r message=FALSE}
+library(cluster)
+library(factoextra)
+```
+
+#### Estimating the optimal number of clusters
+
+To estimate the optimal number of clusters, we’ll use the average silhouette method. The idea is to compute PAM algorithm using different values of clusters k. Next, the average clusters silhouette is drawn according to the number of clusters. The average silhouette measures the quality of a clustering. A high average silhouette width indicates a good clustering. The optimal number of clusters k is the one that maximize the average silhouette over a range of possible values for k (Kaufman and Rousseeuw 1990).
+
+```{r}
+fviz_nbclust(lcm, pam, method = "silhouette")+
+  theme_classic()
+```
+
+```{r}
+pam.k <- pam(lcm, k = 3)
+```
+
+```{r}
+fviz_cluster(pam.k, 
+             ellipse.type = "t", # Concentration ellipse
+             ggtheme = theme_classic()
+             )
+```
+
+
