@@ -1,5 +1,5 @@
 ---
-title: "MediaTenor Data"
+title: "Clustering Time Series"
 output: 
   html_document:
     fig_width: 10
@@ -9,6 +9,13 @@ output:
     self_contained: true
 ---
 
+Clustering is the process of grouping like objects together so that objects within a cluster are more similar to each other than to objects of other clusters. In general, this can be performed on any kind of data (e.g. non-time series ‘static’ data), but applying it to time series involves several unique challenges. Namely, time series data often have a large degree of dependence within a single series, and time series clustering tends to be of a much higher dimension than typical static clustering.
+
+There are three components necessary to most clustering approaches:
+
+  1. A measure of similarity or dissimilarity, i.e. a distance measure.
+  2. A clustering algorithm.
+  3. A method to evaluate clusters.
 
 ```{r message=FALSE, warning=FALSE, include=FALSE}
 library(foreign)
@@ -23,6 +30,7 @@ library(Hmisc)
 library(labelled)
 library(lubridate)
 library(gridExtra)
+library(purrr)
 
 # Theming
 quartzFonts(
@@ -50,102 +58,179 @@ rm(list=ls())
 col <- RColorBrewer::brewer.pal(6,"Dark2")
 ```
 
-# Load Data
+# Data
+
+The data is collapsed by Day.
 
 For details about data prepataion see [here](https://github.com/franziloew/mediabias/blob/master/docs/data_prep.Rmd)
 
 ```{r message=FALSE, warning=FALSE}
 load(file = "../output/mediatenorCOLLAPSEDDF.Rda")
 
-head(df.collapsed)
+htmlTable(df.collapsed[1:20,])
 ```
 
-### Subset data
+## Subset
 
-```{r}
+To test the approach, I subset the data to:
+    
+    * Timespan: Jan 2003 - Jan 2004 
+    
+    * Category: Tageszeitungen, TV-Nachrichten
+    
+    * Time Series: CDU/CSU
+
+```{r fig.height=6, fig.width=10}
 df.collapsed %>%
-  filter(category == "daily_print") %>%
+  filter(category %in% c("daily_print", "news_tv")) %>%
+  mutate(medium = as.character(medium)) %>%
   filter(p_group == "CDU/CSU") %>%
   filter(date > "2003-01-01" &
            date < "2004-01-01") %>%
-  select(date, wertung, medium) -> test.df
+  select(date, wertung, medium, category) -> daily.print
 
-ggplot(test.df, aes(date, wertung, color = medium)) +
+ggplot(daily.print, aes(date, wertung, color = medium)) +
   geom_line() + labs(x="", y="", color="") +
   scale_x_date(breaks = date_breaks("1 month"), 
                labels=date_format("%b-%Y", tz="CET")) +
+  facet_wrap(~category, ncol = 1) +
   theme(axis.text.x = element_text(angle = 90))
 ```
 
-### Convert to time series
-```{r message=FALSE}
-library(xts)
-
-daily_news.df <- test.df %>% spread(medium, wertung)
-
-ts.df <- as.xts(daily_news.df %>% select(-date), 
-                daily_news.df$date)
-ts.df <- ts(ts.df)
-ts.df[is.na(ts.df)] <- 0
-
-head(ts.df)
+```{r include=FALSE}
+daily.print <- daily.print %>% select(-date, category)
 ```
 
-```{r}
-x <- ts.df[,2]
-y <- ts.df[,4]
+# Similarity/Distance Measure
+
+Clustering involves grouping objects together through a measure of similarity. This need not always be a distance, strictly speaking (e.g. both similarity measures defined below do not satisfy the triangle inequality), so long as it can be used to create a pairwise similarity matrix between all objects. A naive approach which often performs decently in practice is to simply use Euclidean (or L1, etc.) distance.
+
+Many similarity measures can be found in the literature and can be mixed and matched with different clustering algorithms. An overview is given in [Aghabozorgi (2015)](https://www.sciencedirect.com/science/article/pii/S0306437915000733#t0020)
+
+### DTW
+
+Dynamic Time Warping (DTW) can be thought of as an alignment algorithm. The basic idea is to match the shapes of the time series while allowing for different time speed by computing an optimum ‘warping curve’. It is slower and more computationally intensive than Euclidean distance but tends to be more robust. It is most easily understood visually.
+
+The Figure below plots the alignment performed by the DTW algorithm between "Bild" and "Die Welt". The dashed lines exemplify how some points are mapped to each other, which shows how they can be warped in time. (Note that the vertical position of each series was artificially altered for visualization. 
+
+The computed distance between the two series is:
+```{r message=FALSE, warning=FALSE}
+library("dtw")
+
+ref <- ts(daily.print %>% 
+            filter(medium == "Bild") %>% select(wertung))
+test <- ts(daily.print %>% 
+            filter(medium == "Die Welt") %>% select(wertung))
+
+alignment <- dtw(test,ref,k=T)
+alignment$distance
 ```
 
-### Compute Dynamic Time Warp and find optimal alignment between time series.
-
-```{r}
-library(dtw)
-alignment<-dtw(x,y,keep=TRUE)
-
-plot(alignment,type="two",off=1,match.lty=2,match.indices=20)
-```
-
-Cost Matrix
 ```{r fig.height=6, fig.width=10}
-lcm <- alignment$costMatrix
-
-#### PLOT multiple Time series #####
-#lcm <- alignment$localCostMatrix
-
-# plot <- lcm %>% as_tibble() %>%
-#   mutate(date = daily_news.df$date) %>%
-#   gather(medium, distance, -date)
-# 
-# ggplot(plot, aes(date, medium)) +
-#   geom_tile(aes(fill=distance), color = "white") +
-#   scale_fill_gradient(low = "white", high = "steelblue") +
-#   labs(x="",y="",fill="Dynamic Time Warp\nCost Matrix")
+plot(alignment,type="two",off=1,
+     match.lty=2,match.indices=50)
 ```
 
-### K-medoids clustering
+Our ultimate objective is to cluster different mediums based on their similarities in the valuation of CDU/CSU over time. So we need to produce a distance matrix where each cell contains the distance between a pair of medium valuation time series.
+
+```{r}
+# Split data into list by medium
+ds <- split(daily.print, daily.print$medium)
+
+# Use expand.grid to make all combinations of names and values
+names <- expand.grid(unique(daily.print$medium), unique(daily.print$medium))
+values <- expand.grid(ds,ds)
+
+# purrr:map_dbl iterates through all row-combinations of Values and returns a vector of doubles
+Dist <- map_dbl(1:nrow(values), ~dtw(x = values[.x,]$Var1[[1]]$wertung,
+                                     y = values[.x,]$Var2[[1]]$wertung)$distance)
+
+# Bind answer to names
+ans <- names %>% mutate(distance = Dist)
+
+ans %>% 
+  mutate(distance = round(distance,2)) %>%
+  spread(Var2, distance) %>%
+  htmlTable::htmlTable()
+```
+
+## Plot Results
+```{r fig.height=8, fig.width=10}
+ggplot(ans, aes(Var1, Var2)) +
+  geom_tile(aes(fill=distance), color = "white") +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(x="",y="",fill="",
+       title="Distance Matrix",
+       subtitle = "Computed by Dynamic Time Warp") +
+  theme(axis.text.x = element_text(angle=45),
+        axis.text = element_text(size = 10))
+```
+
+# K-medoids clustering
+
+K-medoids is the better choice after DTW (uses DTW-medoid for finding the cluster center). 
+
+As DTW is not minimized by the mean, k-means may not converge and even if it converges it will not yield a very good result. The mean is an least-squares estimator on the coordinates. It minimizes variance, not arbitrary distances, and k-means is designed for minimizing variance, not arbitrary distances.  
+
 ```{r message=FALSE}
 library(cluster)
 library(factoextra)
 ```
 
-#### Estimating the optimal number of clusters
+```{r}
+ans %>% 
+  spread(Var2, distance) -> ans.wide
 
-To estimate the optimal number of clusters, we’ll use the average silhouette method. The idea is to compute PAM algorithm using different values of clusters k. Next, the average clusters silhouette is drawn according to the number of clusters. The average silhouette measures the quality of a clustering. A high average silhouette width indicates a good clustering. The optimal number of clusters k is the one that maximize the average silhouette over a range of possible values for k (Kaufman and Rousseeuw 1990).
+m.ans <- as.matrix(ans.wide %>% select(-Var1))
+rownames(m.ans) <- ans.wide$Var1
+```
+
+## Results (K = 3)
 
 ```{r}
-fviz_nbclust(lcm, pam, method = "silhouette")+
-  theme_classic()
+k = 3
+pam.k <- pam(m.ans, k = k)
+pam.k
 ```
 
 ```{r}
-pam.k <- pam(lcm, k = 3)
+m.ans %>%
+  as_tibble() %>%
+  mutate(cluster = pam.k$clustering,
+         medium = ans.wide$Var1) %>%
+  select(medium, cluster) %>%
+  htmlTable()
 ```
 
-```{r}
+### Plot Results
+
+* The default level of the concentration ellipse is 0.95.
+
+```{r fig.height=6, fig.width=8, message=FALSE, warning=FALSE}
 fviz_cluster(pam.k, 
              ellipse.type = "t", # Concentration ellipse
-             ggtheme = theme_classic()
-             )
+             repel = T,
+             title = paste0("Cluster Plot, K=",k),
+             subtitle = "Time span: Jan2003-Jan2004\nTime Series: CDU/CSU"
+             ) +
+  theme(legend.position = "none")
 ```
+
+### With K = 4
+
+```{r fig.height=6, fig.width=8}
+k = 4
+pam.k <- pam(m.ans, k = k)
+
+fviz_cluster(pam.k, 
+             ellipse.type = "t", # Concentration ellipse
+             repel = T,
+             title = paste0("Cluster Plot, K=",k),
+             subtitle = "Time span: Jan2003-Jan2004\nTime Series: CDU/CSU"
+             ) +
+  theme(legend.position = "none")
+```
+
+
 
 
